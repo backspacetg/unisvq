@@ -1,0 +1,1 @@
+Code for our paper UniSVQ: 2-bit Unified Scalar-Vector Quantization and LC-QAT: Data-Efficient 2-Bit QAT for LLMs via Linear-Constrained Vector Quantization. Detailed instruction and pretrained models will be available soon!

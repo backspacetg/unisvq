@@ -1,0 +1,14 @@
+datasets
+fast_hadamard_transform
+flash_attn
+glog
+huggingface_hub
+lm_eval
+matplotlib
+numpy
+primefac
+scipy
+setuptools
+tqdm
+torch==2.5.1
+transformers==4.51.1
