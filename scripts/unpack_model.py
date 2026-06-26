@@ -1,6 +1,9 @@
 import os
 import sys
-sys.path.append("/home/wanghaoyu2/simple_tvq")
+path = __file__
+for i in range(2):
+    path = os.path.dirname(path)
+sys.path.append(path)
 import tqdm
 import json
 import shutil
@@ -9,11 +12,11 @@ import argparse
 import torch
 from torch import nn
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
-from model.tvq import TVQHadLinear, matmul_hadU_cuda_blockwise
+from model.lc_qat_linear import LCQATHadLinear, matmul_hadU_cuda_blockwise
 from accelerate import init_empty_weights
 
 
-def unpack_tvq_blockwise_linear(linear: TVQHadLinear):
+def unpack_vq_blockwise_linear(linear: LCQATHadLinear):
     in_features = linear.in_features
     out_features = linear.out_features
     device = linear.weight.device
@@ -155,42 +158,31 @@ def split_layer(linear: nn.Linear, name: str, config):
 parser = argparse.ArgumentParser()
 parser.add_argument("--model_path", type=str)
 parser.add_argument("--output_path", type=str)
-parser.add_argument("--is_megatron_model", action="store_true")
-parser.add_argument("--splited_model_ref_path", type=str, default=None)
+parser.add_argument("--ref_model_path", type=str, default=None)
 parser.add_argument("--overwrite_config_path", type=str, default=None)
 
 args = parser.parse_args()
 if args.overwrite_config_path is not None:
     assert os.path.exists(args.overwrite_config_path) and os.path.isfile(args.overwrite_config_path)
-model_path = args.model_path #"/data/groups/QY_LLM_Other/wanghaoyu/exp/tvq/Qwen3-4B-instruct-2507-normal"
-output_path = args.output_path #"/data/groups/QY_LLM_Other/wanghaoyu/exp/tvq/Qwen3-4B-instruct-2507-debug"
+model_path = args.model_path
+output_path = args.output_path
 
 config = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
 tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True, torch_dtype=torch.float32).to(device="cuda")
 pbar = tqdm.tqdm(total=len(model.model.layers))
 
-if args.splited_model_ref_path is None:
-    args.splited_model_ref_path = os.path.dirname(args.overwrite_config_path)
+if args.ref_model_path is None:
+    args.ref_model_path = os.path.dirname(args.overwrite_config_path)
 
-hf_ref_config = AutoConfig.from_pretrained(args.splited_model_ref_path, trust_remote_code=True)
+hf_ref_config = AutoConfig.from_pretrained(args.ref_model_path, trust_remote_code=True)
 
 for i, layer in enumerate(model.model.layers):
-    # print(f"unpacking layer {i}, blockwise={config.block_hadamard}")
-    linears = find_layers(layer, layers=[TVQHadLinear] if config.block_hadamard else [TVQHadLinear])
-    pbar.set_description_str(f"unpacking layer {i}, blockwise={config.block_hadamard}")
+    linears = find_layers(layer, layers=[LCQATHadLinear])
+    pbar.set_description_str(f"unpacking layer {i}")
     for name, q_linear in linears.items():
-
-        new_linear = unpack_tvq_blockwise_linear(q_linear)
-        if args.is_megatron_model:
-            new_names_and_linears, del_origin = split_layer(new_linear, name, hf_ref_config)
-            for split_name, split_linear in new_names_and_linears:
-                # print("set here")
-                set_op_by_name(layer, split_name, split_linear)
-            if del_origin:
-                del_op_by_name(layer, name)
-        else:
-            set_op_by_name(layer, name, new_linear)
+        new_linear = unpack_vq_blockwise_linear(q_linear)
+        set_op_by_name(layer, name, new_linear)
     pbar.update(1)
 
 

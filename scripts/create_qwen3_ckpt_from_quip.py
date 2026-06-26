@@ -3,25 +3,33 @@ import sys
 import math
 import json
 import shutil
+import argparse
 import warnings
 from tqdm import tqdm
 path = __file__
 for i in range(2):
     path = os.path.dirname(path)
+sys.path.append(path)
 warnings.simplefilter('once', UserWarning)
 
 import torch
 import torch.nn.functional as F
 from safetensors import safe_open, SafetensorError
 from transformers import AutoTokenizer
-from model.modeling_qwen3_vq import Qwen3TVQConfig, Qwen3TVQForCausalLM, TVQBlockHadLinear
-from model.matmul_had import matmul_hadU_cuda_blockwise
+from model.modeling_qwen3_vq import Qwen3LCQATConfig, Qwen3LCQATForCausalLM, LCQATHadLinear
+from lib.utils.matmul_had import matmul_hadU_cuda_blockwise
 
-ori_model_path = "/data/groups/QY_LLM_Other/wanghaoyu/pretrained_models/Qwen3-1.7B"
-init_ckpt_path = "/data/groups/QY_LLM_Other/wanghaoyu/exp/quip_sharp/Qwen3-1.7B/hf_blockwise"
-output_path = "/data/groups/QY_LLM_Other/wanghaoyu/exp/tvq/Qwen3-1.7B_blockwise"
+parser = argparse.ArgumentParser()
+parser.add_argument("--ori_model_path", type=str)
+parser.add_argument("--init_ckpt_path", type=str)
+parser.add_argument("--output_path", type=str)
+parser.add_argument("--attention_bias", action='store_true')
+args = parser.parse_args()
 
-attention_bias = False
+ori_model_path = args.ori_model_path 
+init_ckpt_path = args.init_ckpt_path 
+output_path = args.output_path
+attention_bias = args.attention_bias
 
 def idx_to_quant_weight(idx: torch.Tensor, code_vec_size: int, code_possible_vars: int) -> torch.Tensor:
     quant_weight = idx.new_zeros(idx.shape[0], code_vec_size*idx.shape[1])
@@ -56,7 +64,7 @@ def idx_to_quant_weight(idx: torch.Tensor, code_vec_size: int, code_possible_var
     return quant_weight
 
 
-def get_tensors_from_ckpt(quip_ckpt: safe_open, key: str, module: TVQBlockHadLinear, quip_cfgs: dict, attention_bias=False):
+def get_tensors_from_ckpt(quip_ckpt: safe_open, key: str, module: LCQATHadLinear, quip_cfgs: dict, attention_bias=False):
 
     if quip_cfgs["code_nbit"] <= 2:
         code_dtype = torch.uint8
@@ -69,7 +77,7 @@ def get_tensors_from_ckpt(quip_ckpt: safe_open, key: str, module: TVQBlockHadLin
     num_out_groups, num_in_groups = codes.shape
     out_features = num_out_groups
     in_features = num_in_groups * quip_cfgs["vec_size"]
-    # 获取Scale
+    # Get scales
     su = quip_ckpt.get_tensor(key + ".SU").to(device=device, dtype=config.torch_dtype)
     sv = quip_ckpt.get_tensor(key + ".SV").to(device=device, dtype=config.torch_dtype)
     try:
@@ -91,13 +99,11 @@ def get_tensors_from_ckpt(quip_ckpt: safe_open, key: str, module: TVQBlockHadLin
         bias = quip_ckpt.get_tensor(key + ".bias")
         module.bias.data = bias.to(device=device, dtype=config.torch_dtype)
 
-    # 生成权重、添加参考值、进行缩放
+    # Generate weights, apply reference value and scaling
     weight = idx_to_quant_weight(
         codes, 
         code_vec_size=quip_cfgs["vec_size"], 
         code_possible_vars=max_var+1).to(dtype=config.torch_dtype)
-    # print(codes[0, :2])
-    # print(weight[0, :8])
     xavier_zero_point = (max_var)/2
     xavier_scale = math.sqrt(out_features+in_features)/2
     weight = (weight - xavier_zero_point)/xavier_scale
@@ -112,9 +118,6 @@ def get_tensors_from_ckpt(quip_ckpt: safe_open, key: str, module: TVQBlockHadLin
         module.code_generator.codebook_zero_point.data = torch.tensor(codebook_zero_point)
     
     module.weight.data = weight.to(config.torch_dtype)
-
-    # module.code_generator.max_var.data = torch.tensor(max_var)
-
     return module
 
 
@@ -157,7 +160,7 @@ if __name__ == "__main__":
     
     quant_cfg = get_config_from_quip_param(quip_params)
 
-    config = Qwen3TVQConfig.from_pretrained(
+    config = Qwen3LCQATConfig.from_pretrained(
         init_ckpt_path,
         vec_size=quant_cfg["vec_size"],
         torch_dtype=torch.bfloat16,
@@ -168,16 +171,16 @@ if __name__ == "__main__":
     )
     delattr(config, "quip_params")
     
-    model = Qwen3TVQForCausalLM.from_pretrained(ori_model_path, config=config, ignore_mismatched_sizes=True)
+    model = Qwen3LCQATForCausalLM.from_pretrained(ori_model_path, config=config, ignore_mismatched_sizes=True)
     device = torch.device("cuda:0")
 
     with safe_open(os.path.join(init_ckpt_path, "model.safetensors"), framework="pt") as quip_ckpt:
-        # 生成规则码本
+        # Generate regular codebook
         pbar = tqdm(total=len(model.model.layers))
         last_layer = 0
         for key, module in model.named_modules():
             module.to(device=device, dtype=config.torch_dtype)
-            if not key.endswith("_proj"): # TODO：收集这部分参数 在替换结束后集中复制
+            if not key.endswith("_proj"):  # TODO: collect non-proj params and copy after replacement
                 continue
             pbar.set_description_str(f"processing module {key} {type(module)}")
             module = get_tensors_from_ckpt(
@@ -193,7 +196,7 @@ if __name__ == "__main__":
                 last_layer = current_layer
         pbar.update(1)
 
-    # 保存
+    # Save
     pbar.set_description_str(f"saving to {output_path}")
     model = model.to(device)
     tokenizer = AutoTokenizer.from_pretrained(init_ckpt_path, trust_remote_code=True)

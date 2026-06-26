@@ -10,8 +10,9 @@ slurm_out/
 hfized/
 quiptools/build/
 quiptools/dist
-hadamard_cuda/build/
-hadamard_cuda/dist/
+hadaquant/csrc/build/
+hadaquant/csrc/dist/
+
 report*.nsys-rep
 report*.sqlite
 
@@ -25,3 +26,5 @@ test.py
 *.zip
 *.tar.gz
 *.tar
+.claude/
+.venv/
