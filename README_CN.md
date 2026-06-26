@@ -168,10 +168,11 @@ QAT 训练中，我们使用Ruizhe Wang等人在 Optimizing Large Language Model
 
 如果您在研究中使用了本代码，请引用：
 
+
 ```bibtex
 @article{wang2026lcqat,
   title   = {LC-QAT: Data-Efficient 2-Bit QAT for LLMs via Linear-Constrained Vector Quantization},
-  author  = {Wang, Haoyu and others},
+  author  = {Wang, Haoyu and Yu, Xingyu and Zhao, Haiyan and Wang, Fengxiang and Han, Xu},
   journal = {arXiv preprint arXiv:2606.10531},
   year    = {2026}
 }

@@ -168,7 +168,7 @@ If you use this code in your research, please cite:
 ```bibtex
 @article{wang2026lcqat,
   title   = {LC-QAT: Data-Efficient 2-Bit QAT for LLMs via Linear-Constrained Vector Quantization},
-  author  = {Wang, Haoyu and others},
+  author  = {Wang, Haoyu and Yu, Xingyu and Zhao, Haiyan and Wang, Fengxiang and Han, Xu},
   journal = {arXiv preprint arXiv:2606.10531},
   year    = {2026}
 }
@@ -180,7 +180,3 @@ If you use this code in your research, please cite:
   year    = {2026}
 }
 ```
-
-## License
-
-This project is released under the Apache 2.0 License.
