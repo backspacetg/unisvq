@@ -1,4 +1,4 @@
-# 🔴 This repository is no longer under maintenance. Please refer to [A9Stars UniSVQ](https://github.com/AI9Stars/UniSVQ) for subsequent updates.
+# 🔴 This repository is no longer under maintenance. Please refer to [AI9Stars UniSVQ](https://github.com/AI9Stars/UniSVQ) for subsequent updates.
 
 ## UniSVQ & LC-QAT: 2-Bit LLM Quantization with Linear-Constrained Vector Quantization
 
