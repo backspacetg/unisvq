@@ -1,4 +1,6 @@
-# UniSVQ & LC-QAT: 2-Bit LLM Quantization with Linear-Constrained Vector Quantization
+# 🔴 This repository is no longer under maintenance. Please refer to [A9Stars UniSVQ](https://github.com/AI9Stars/UniSVQ) for subsequent updates.
+
+## UniSVQ & LC-QAT: 2-Bit LLM Quantization with Linear-Constrained Vector Quantization
 
 This repository contains the official implementations of two companion papers on 2-bit LLM quantization, along with further improvements for efficient inference:
 
@@ -23,9 +25,9 @@ We also strengthen the model's performance on math, code, and complex tasks usin
 | 2bit  | 66.00      | 71.94 | 58.98 | 70.36 | 42.20 | 46.95     | 52.58 | 58.43 |
 
 
-## Installation
+### Installation
 
-### 1. Install Python Dependencies
+#### 1. Install Python Dependencies
 
 ```bash
 pip install -r requirements.txt
@@ -45,7 +47,7 @@ Key dependencies:
 - `lm_eval`
 - `fast-hadamard-transform`
 
-### 2. Install HadaQuant CUDA Extension
+#### 2. Install HadaQuant CUDA Extension
 
 The HadaQuant package provides optimized CUDA kernels for 128-block Hadamard transforms and packed 2-bit dequantization:
 
@@ -57,7 +59,7 @@ cd ../..
 
 The kernels are compiled for SM 80/86/89/90 (A100, RTX 3090, RTX 4090, H100). Edit `setup.py` to add/remove GPU architectures as needed.
 
-## Pipeline Overview
+### Pipeline Overview
 
 The full pipeline consists of 3 stages + evaluation:
 
@@ -78,9 +80,9 @@ The full pipeline consists of 3 stages + evaluation:
    - LM benchmarks: `lm_eval.sh`
    - Inference throughput: `quantized_infer.py` (requires `hadaquant` CUDA extension)
 
-## Usage
+### Usage
 
-### Step 1: PTQ Initialization
+#### Step 1: PTQ Initialization
 
 Edit `unisvq_qwen3_1.7B.sh` and set the paths:
 
@@ -99,7 +101,7 @@ The script runs in 3 stages (controlled by `stage` variable):
 bash unisvq_qwen3_1.7B.sh
 ```
 
-### Step 2: Convert Checkpoint for QAT
+#### Step 2: Convert Checkpoint for QAT
 
 Convert the PTQ checkpoint into a format suitable for QAT training with ms_swift:
 
@@ -115,7 +117,7 @@ This script:
 2. Initializes the trainable weights for the linear codebook
 3. Saves the checkpoint in ms_swift-compatible format
 
-### Step 3: QAT Training
+#### Step 3: QAT Training
 
 Edit `lc_qat_1.7B.sh` and set the paths, then run:
 
@@ -127,9 +129,9 @@ This uses `ms_swift` for distributed QAT fine-tuning with DeepSpeed. The trainin
 - 4 GPUs by default (`NPROC_PER_NODE=4`)
 - Uses the `qwen3_lcqat` model type registered in `model/register.py`
 
-### Step 4: Evaluation
+#### Step 4: Evaluation
 
-#### LM Evaluation Benchmark
+##### LM Evaluation Benchmark
 
 Edit `lm_eval.sh` to set `exp_dir` and `origin_model_path`, then:
 
@@ -139,7 +141,7 @@ bash lm_eval.sh
 
 This unpacks the QAT checkpoint and evaluates on standard benchmarks: ARC-Challenge, ARC-Easy, BoolQ, HellaSwag, PIQA, and WinoGrande.
 
-#### Inference Throughput Evaluation
+##### Inference Throughput Evaluation
 
 After installing the HadaQuant CUDA extension:
 
@@ -147,21 +149,21 @@ After installing the HadaQuant CUDA extension:
 ./quantized_infer.sh
 ```
 
-## Key Technical Details
+### Key Technical Details
 
-### Linear Codebook (LCVQ)
+#### Linear Codebook (LCVQ)
 
 Traditional vector quantization uses a discrete codebook lookup, which requires a straight-through estimator (STE) to pass gradients. Our linear codebook ([`lib/codebook/index_codebook.py`](lib/codebook/index_codebook.py)) replaces this with an orthogonal linear projection using a fixed orthogonal matrix. This achieves better performance than conventional 2-bit scalar methods while allowing end-to-end QAT training of all quantization weights.
 
-### Block-wise Hadamard Transform
+#### Block-wise Hadamard Transform
 
 The original method applies Hadamard transforms over the full input/output dimensions, which is expensive for inference. We constrain the transform to **128×128 blocks**, enabling CUDA kernel fusion of the Hadamard transform with SU/SV scaling. This block-wise design also supports tensor parallelism for distributed training.
 
-### Differentiable Quantization (DGE)
+#### Differentiable Quantization (DGE)
 
 During QAT training, we adopt the [differentiable gradient estimator](https://arxiv.org/abs/2501.17116) proposed by Ruizhe Wang et al. in *Optimizing Large Language Model Training Using FP4 Quantization*. We further introduce stochastic gradient masking to stabilize training, and enable end-to-end training of the codebook projection, scales (SU/SV), and latent weights.
 
-## Citation
+### Citation
 
 If you use this code in your research, please cite:
 
